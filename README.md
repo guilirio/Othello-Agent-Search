@@ -18,8 +18,8 @@ Interface / experimentos → controlador da partida → agentes
 
 ## Desenvolvimento
 
-1. Estrutura e rastreabilidade dos requisitos (atual).
-2. Regras e histórico do Othello.
+1. Estrutura e rastreabilidade dos requisitos (concluído).
+2. Regras e histórico do Othello (concluído).
 3. Heurística e ferramentas do ambiente.
 4. Agente LLM com LangGraph.
 5. Interface e modos Humano × Agente / Agente × Agente.
@@ -27,3 +27,13 @@ Interface / experimentos → controlador da partida → agentes
 
 Cada etapa recebe seu próprio commit e atualiza este README. Consulte
 [os requisitos](docs/requirements.md) para distinguir exigências do enunciado e escolhas de implementação.
+
+## Motor do jogo
+
+`game.py` mantém um tabuleiro imutável com 64 casas. As coordenadas internas são `(linha, coluna)`,
+de 0 a 7. Preto (`1`) inicia; branco é `-1` e vazio é `0`. Um passe é permitido apenas sem jogadas
+legais; a partida termina quando nenhum jogador pode jogar, mesmo que existam casas vazias.
+Cada ação válida acrescenta jogador, posição, placar e explicação ao histórico.
+
+Para verificar as regras sem instalar dependências, defina `PYTHONPATH=src` e execute
+`python -m unittest discover -s tests -v` na raiz do projeto.

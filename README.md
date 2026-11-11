@@ -22,7 +22,7 @@ Interface / experimentos → controlador da partida → agentes
 2. Regras e histórico do Othello (concluído).
 3. Heurística e ferramentas do ambiente (concluído).
 4. Agente LLM com LangGraph (implementado; execução real requer Ollama).
-5. Interface e modos Humano × Agente / Agente × Agente.
+5. Interface e modos Humano × Agente / Agente × Agente (implementado).
 6. Experimentos, relatório e preparação da entrega.
 
 Cada etapa recebe seu próprio commit e atualiza este README. Consulte
@@ -77,3 +77,22 @@ ativo (`ollama serve`, quando necessário). Configure `OTHELLO_MODEL` para outro
 Referências de implementação: [StateGraph](https://reference.langchain.com/python/langgraph/graph/state)
 e [ChatOllama](https://reference.langchain.com/python/langchain-ollama/langchain_ollama/chat_models/ChatOllama).
 Os testes do grafo usam respostas simuladas; eles não comprovam a força de jogo de uma LLM real.
+
+## Executar
+
+```powershell
+othello gui
+othello play --black heuristic --white random --seed 42 --json artifacts/partida.json
+othello play --black llm --white heuristic --model qwen2.5:3b --json artifacts/llm.json
+python -m unittest discover -s tests -v
+```
+
+Também é possível usar `python -m othello` no lugar de `othello`. Na interface, escolha os
+participantes e clique em **Nova partida**. `human × llm` atende ao modo Humano × Agente;
+`llm × heuristic` ou `llm × llm` permitem acompanhar agentes. Pontos indicam jogadas válidas.
+Chamadas ao modelo são executadas em segundo plano; é possível pausar e reiniciar. Ao pausar,
+uma ação já em processamento pode terminar. Uma nova partida descarta resultados da anterior.
+Use **Exportar partida** para guardar histórico e métricas em JSON.
+
+Tkinter acompanha as distribuições comuns de Python para Windows. No Linux pode ser necessário
+instalar o pacote `python3-tk` da distribuição. O executor `play` funciona sem interface gráfica.

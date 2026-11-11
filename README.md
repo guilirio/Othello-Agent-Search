@@ -23,7 +23,7 @@ Interface / experimentos → controlador da partida → agentes
 3. Heurística e ferramentas do ambiente (concluído).
 4. Agente LLM com LangGraph (implementado; execução real requer Ollama).
 5. Interface e modos Humano × Agente / Agente × Agente (implementado).
-6. Experimentos (implementado), relatório e preparação da entrega.
+6. Experimentos clássicos concluídos; relatório preliminar e empacotador disponíveis.
 
 Cada etapa recebe seu próprio commit e atualiza este README. Consulte
 [os requisitos](docs/requirements.md) para distinguir exigências do enunciado e escolhas de implementação.
@@ -119,3 +119,32 @@ Testes gráficos são opcionais e precisam de um desktop com Tk instalado:
 `$env:OTHELLO_UI_TESTS='1'; python -m unittest discover -s tests -p test_gui.py -v`.
 Eles exercitam jogada humana, reinício durante trabalho anterior e uma partida completa com agentes.
 Os metadados experimentais resolvem o modelo padrão e a variável `OTHELLO_MODEL`, mesmo sem `--model`.
+
+## Resultados e estado da entrega
+
+Em 40 partidas com cores alternadas e seeds base 42–61, o agente heurístico venceu 39 (97,5%)
+e o aleatório venceu 1 (2,5%); não houve empates ou falhas. Tempos médios por turno: 3,170 ms e
+0,194 ms. Consulte [o resumo medido](docs/results/baseline.json) e [o relatório preliminar](docs/report.md).
+Estes resultados são exclusivamente dos agentes clássicos.
+
+O código foi verificado com Python 3.12; a interface Tk foi exercitada também com Python 3.15.
+`requirements-lock.txt` registra as versões usadas na verificação. Para reproduzir as dependências:
+`python -m pip install -r requirements-lock.txt` e depois `python -m pip install --no-deps -e .`.
+Prefira Python 3.12 com Tk disponível para reproduzir esse ambiente; o runtime interno do Codex
+usado para os testes de backend não incluía os arquivos Tcl necessários à janela.
+
+Para concluir a entrega acadêmica ainda é necessário:
+
+- Ativar Ollama e executar partidas reais com o modelo escolhido.
+- Incorporar resultados e análise da LLM ao relatório, retirando a marca de rascunho após revisão.
+- Gravar o vídeo de 8–10 minutos seguindo [o roteiro](docs/video.md) e inserir seu link real.
+- Informar os nomes dos autores e gerar o ZIP com o relatório final:
+
+```powershell
+python scripts/package_submission.py --authors nome1 nome2 --video-url https://endereco-do-video --report caminho/relatorio-final.pdf
+```
+
+O empacotador exige árvore Git limpa e não sobrescreve uma entrega existente. Inclui código
+versionado, README, relatório, autores e link do vídeo; não inclui ambiente virtual, credenciais
+ou metadados internos do Git. O torneio do enunciado é opcional; sua pontuação 3/1/0 é calculada
+nos experimentos. A integração externa depende de um protocolo que o enunciado não especifica.

@@ -114,3 +114,8 @@ retorna código 1 se houver falhas. Compare os números de falhas junto às taxa
 As seeds reproduzem os agentes clássicos; temperatura zero não garante reprodução exata de uma LLM.
 O resultado registra modelo solicitado, versões das bibliotecas, Python e plataforma. Artefatos brutos
 ficam em `artifacts/`, fora do Git; resumos selecionados podem ser versionados em `docs/results/`.
+
+Testes gráficos são opcionais e precisam de um desktop com Tk instalado:
+`$env:OTHELLO_UI_TESTS='1'; python -m unittest discover -s tests -p test_gui.py -v`.
+Eles exercitam jogada humana, reinício durante trabalho anterior e uma partida completa com agentes.
+Os metadados experimentais resolvem o modelo padrão e a variável `OTHELLO_MODEL`, mesmo sem `--model`.

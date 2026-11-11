@@ -3,6 +3,7 @@ import csv
 from datetime import datetime, timezone
 from importlib.metadata import PackageNotFoundError, version
 import json
+import os
 from pathlib import Path
 import platform
 
@@ -42,6 +43,8 @@ def summarize(matches, a, b):
 def run_experiments(a, b, games=20, seed=0, model=None, output=Path("artifacts/experiment")):
     if games < 2 or games % 2:
         raise ValueError("Use um número par de partidas, pelo menos 2, para equilibrar as cores.")
+    if "llm" in (a, b):
+        model = model or os.getenv("OTHELLO_MODEL", "qwen2.5:3b")
     matches = []
     for index in range(games):
         a_color = 1 if index % 2 == 0 else -1

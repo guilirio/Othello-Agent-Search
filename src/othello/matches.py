@@ -1,5 +1,6 @@
 """Shared match execution for CLI and experiments."""
 from dataclasses import asdict
+import os
 from .agents import ClassicAgent
 from .game import Game
 
@@ -14,6 +15,8 @@ def make_agent(name, seed=0, model=None, base_url=None):
 
 
 def play_match(black="heuristic", white="random", seed=0, model=None, base_url=None):
+    if "llm" in (black, white):
+        model = model or os.getenv("OTHELLO_MODEL", "qwen2.5:3b")
     game = Game()
     agents = {1: make_agent(black, seed, model, base_url),
               -1: make_agent(white, seed + 1, model, base_url)}

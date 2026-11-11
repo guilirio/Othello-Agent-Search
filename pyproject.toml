@@ -1,0 +1,16 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "othello-agent-search"
+version = "0.1.0"
+description = "Tool-using Othello agents with LangGraph, game memory and reproducible experiments"
+requires-python = ">=3.11"
+dependencies = ["langgraph>=1,<2", "langchain-ollama>=1,<2"]
+
+[project.scripts]
+othello = "othello.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]

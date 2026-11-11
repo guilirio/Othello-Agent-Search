@@ -20,7 +20,7 @@ Interface / experimentos → controlador da partida → agentes
 
 1. Estrutura e rastreabilidade dos requisitos (concluído).
 2. Regras e histórico do Othello (concluído).
-3. Heurística e ferramentas do ambiente.
+3. Heurística e ferramentas do ambiente (concluído).
 4. Agente LLM com LangGraph.
 5. Interface e modos Humano × Agente / Agente × Agente.
 6. Experimentos, relatório e preparação da entrega.
@@ -37,3 +37,14 @@ Cada ação válida acrescenta jogador, posição, placar e explicação ao hist
 
 Para verificar as regras sem instalar dependências, defina `PYTHONPATH=src` e execute
 `python -m unittest discover -s tests -v` na raiz do projeto.
+
+## Estratégias e ferramentas
+
+Os agentes `random` e `heuristic` usam o mesmo contrato: executar um turno válido pelo ambiente.
+A heurística avalia o estado após cada jogada por diferença de cantos, mobilidade, peças e exposição
+perto de cantos vazios. Os pesos do perfil `balanced` são `30, 5, 1, -10`; empates são resolvidos
+por gerador pseudoaleatório com seed. Estados terminais recebem pontuação dominante de vitória/derrota.
+
+`GameTools` oferece `get_board_state`, `get_valid_moves`, `make_move`, `get_game_status` e
+`evaluate_moves`. Cada chamada registra argumentos, resultado/erro e duração. A execução valida
+coordenadas, regras e posse do turno; uma instância não pode jogar duas vezes.

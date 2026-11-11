@@ -23,7 +23,7 @@ Interface / experimentos → controlador da partida → agentes
 3. Heurística e ferramentas do ambiente (concluído).
 4. Agente LLM com LangGraph (implementado; execução real requer Ollama).
 5. Interface e modos Humano × Agente / Agente × Agente (implementado).
-6. Experimentos, relatório e preparação da entrega.
+6. Experimentos (implementado), relatório e preparação da entrega.
 
 Cada etapa recebe seu próprio commit e atualiza este README. Consulte
 [os requisitos](docs/requirements.md) para distinguir exigências do enunciado e escolhas de implementação.
@@ -96,3 +96,21 @@ Use **Exportar partida** para guardar histórico e métricas em JSON.
 
 Tkinter acompanha as distribuições comuns de Python para Windows. No Linux pode ser necessário
 instalar o pacote `python3-tk` da distribuição. O executor `play` funciona sem interface gráfica.
+
+## Experimentos
+
+```powershell
+othello experiment --a heuristic --b random --games 40 --seed 42 --output artifacts/baseline
+othello experiment --a llm --b heuristic --games 20 --seed 42 --model qwen2.5:3b --output artifacts/llm
+```
+
+As cores alternam a cada partida; cada par usa a mesma seed base. Os agentes clássicos usam
+geradores independentes por cor. O executor exige quantidade par de partidas e exporta dados brutos,
+resumo JSON e CSV: vitórias, empates, derrotas, taxa de vitória, pontos de torneio, jogadas, turnos,
+tempo médio por turno (inclui passes), chamadas e latência média da LLM e chamadas às ferramentas.
+Partidas com erro ficam registradas e são excluídas do denominador da taxa de vitória; o processo
+retorna código 1 se houver falhas. Compare os números de falhas junto às taxas de vitória.
+
+As seeds reproduzem os agentes clássicos; temperatura zero não garante reprodução exata de uma LLM.
+O resultado registra modelo solicitado, versões das bibliotecas, Python e plataforma. Artefatos brutos
+ficam em `artifacts/`, fora do Git; resumos selecionados podem ser versionados em `docs/results/`.

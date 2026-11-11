@@ -16,11 +16,23 @@ def main():
     play.add_argument("--seed", type=int, default=0)
     play.add_argument("--model")
     play.add_argument("--json", type=Path, dest="output")
+    experiment = commands.add_parser("experiment", help="Compara estratégias com cores alternadas")
+    experiment.add_argument("--a", choices=AGENTS, default="heuristic")
+    experiment.add_argument("--b", choices=AGENTS, default="random")
+    experiment.add_argument("--games", type=int, default=20)
+    experiment.add_argument("--seed", type=int, default=0)
+    experiment.add_argument("--model")
+    experiment.add_argument("--output", type=Path, default=Path("artifacts/experiment"))
     args = parser.parse_args()
     try:
         if args.command in (None, "gui"):
             from .gui import launch
             launch()
+        elif args.command == "experiment":
+            from .experiments import run_experiments
+            result = run_experiments(args.a, args.b, args.games, args.seed, args.model, args.output)
+            print(json.dumps(result["summary"], ensure_ascii=False, indent=2))
+            return 1 if result["summary"]["failed"] else 0
         else:
             result = play_match(args.black, args.white, args.seed, args.model)
             if args.output:

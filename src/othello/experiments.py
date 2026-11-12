@@ -3,11 +3,11 @@ import csv
 from datetime import datetime, timezone
 from importlib.metadata import PackageNotFoundError, version
 import json
-import os
 from pathlib import Path
 import platform
 
 from .matches import play_match
+from .providers import default_model, get_provider, validate_provider
 
 
 def summarize(matches, a, b):
@@ -43,8 +43,11 @@ def summarize(matches, a, b):
 def run_experiments(a, b, games=20, seed=0, model=None, output=Path("artifacts/experiment")):
     if games < 2 or games % 2:
         raise ValueError("Use um número par de partidas, pelo menos 2, para equilibrar as cores.")
+    provider = None
     if "llm" in (a, b):
-        model = model or os.getenv("OTHELLO_MODEL", "qwen2.5:3b")
+        provider = get_provider()
+        model = model or default_model(provider)
+        validate_provider(model)  # falha já aqui (chave/pacote ausentes), e não como N partidas "com erro"
     matches = []
     for index in range(games):
         a_color = 1 if index % 2 == 0 else -1
@@ -56,14 +59,14 @@ def run_experiments(a, b, games=20, seed=0, model=None, output=Path("artifacts/e
             match = {"black": black, "white": white, "seed": match_seed, "error": str(exc)}
         matches.append({"index": index, "a_color": a_color, **match})
     packages = {}
-    for name in ("langgraph", "langchain-ollama"):
+    for name in ("langgraph", "langchain-ollama", "langchain-google-genai", "langchain-groq"):
         try:
             packages[name] = version(name)
         except PackageNotFoundError:
             packages[name] = "not installed"
     report = {"created_at": datetime.now(timezone.utc).isoformat(), "python": platform.python_version(),
               "platform": platform.platform(), "packages": packages, "seed": seed,
-              "model": model, "summary": summarize(matches, a, b), "matches": matches}
+              "provider": provider, "model": model, "summary": summarize(matches, a, b), "matches": matches}
     output = Path(output)
     output.mkdir(parents=True, exist_ok=True)
     (output / "results.json").write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")

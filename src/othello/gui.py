@@ -2,7 +2,6 @@
 from copy import deepcopy
 from dataclasses import asdict
 import json
-import os
 from queue import Empty, Queue
 from threading import Thread
 import tkinter as tk
@@ -10,6 +9,7 @@ from tkinter import filedialog, messagebox, ttk
 
 from .game import Game
 from .matches import make_agent
+from .providers import default_model, get_provider
 
 
 class OthelloApp:
@@ -22,7 +22,7 @@ class OthelloApp:
         self.generation, self.busy, self.paused = 0, False, True
         self.black = tk.StringVar(value="human")
         self.white = tk.StringVar(value="llm")
-        self.model = tk.StringVar(value=os.getenv("OTHELLO_MODEL", "qwen2.5:3b"))
+        self.model = tk.StringVar(value=default_model())
         self.status = tk.StringVar(value="Configure os jogadores e clique em Nova partida.")
         self.config = {1: "human", -1: "llm"}
         controls = ttk.Frame(root, padding=12)
@@ -31,7 +31,7 @@ class OthelloApp:
             ttk.Label(controls, text=label).grid(row=0, column=column * 2, padx=4)
             ttk.Combobox(controls, textvariable=variable, values=("human", "llm", "heuristic", "random"),
                          state="readonly", width=12).grid(row=0, column=column * 2 + 1)
-        ttk.Label(controls, text="Modelo Ollama").grid(row=1, column=0, pady=8)
+        ttk.Label(controls, text=f"Modelo ({get_provider()})").grid(row=1, column=0, pady=8)
         ttk.Entry(controls, textvariable=self.model, width=24).grid(row=1, column=1, columnspan=2)
         ttk.Button(controls, text="Nova partida", command=self.new_game).grid(row=2, column=0, padx=4)
         ttk.Button(controls, text="Pausar / continuar", command=self.toggle_pause).grid(row=2, column=1, padx=4)
@@ -51,7 +51,7 @@ class OthelloApp:
         self.generation += 1
         self.game, self.turns, self.agents = Game(), [], {}
         self.config = {1: self.black.get(), -1: self.white.get()}
-        self.active_model = self.model.get().strip() or "qwen2.5:3b"
+        self.active_model = self.model.get().strip() or default_model()
         self.busy, self.paused = False, False
         self.draw()
         self.root.after(100, self.advance)

@@ -1,7 +1,7 @@
 """A LangGraph decision workflow with LLM planning and tool execution."""
 import json
 import os
-from time import perf_counter
+from time import perf_counter, sleep
 from typing import Literal, TypedDict
 
 from langgraph.graph import END, START, StateGraph
@@ -9,21 +9,21 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from .agents import TurnResult
 from .game import Game
+from .providers import (answer_text, build_model, extract_json, get_provider,
+                        is_daily_quota, is_transient, wait_turn)
 from .tools import GameTools
+
+MAX_ATTEMPTS = 3   # respostas inválidas (formato ou jogada ilegal) por etapa
+MAX_RETRIES = 2    # novas tentativas após erro temporário da API
 
 
 class AgentError(RuntimeError):
     """A model failed to provide a valid action; the game is not silently advanced."""
 
 
-class Plan(BaseModel):
-    model_config = ConfigDict(extra="forbid", strict=True)
-    strategy: Literal["balanced", "mobility", "corners"]
-    summary: str = Field(min_length=1, max_length=1000)
-
-
 class Decision(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
+    strategy: Literal["balanced", "mobility", "corners"]
     row: int = Field(ge=0, le=7)
     column: int = Field(ge=0, le=7)
     explanation: str = Field(min_length=1, max_length=1000)
@@ -34,7 +34,6 @@ class TurnState(TypedDict, total=False):
     observation: dict
     valid_moves: list
     status: dict
-    plan: dict
     alternatives: list
     decision: dict
     event: dict
@@ -55,45 +54,64 @@ class LLMAgent:
     name = "llm"
 
     def __init__(self, model=None, *, model_name: str | None = None, base_url: str | None = None):
+        # Provedor (ollama/gemini/groq) escolhido por OTHELLO_PROVIDER; ver providers.py.
+        self.provider = get_provider()
+        self._throttle = model is None  # espaçamento entre chamadas só para o modelo real
         if model is None:
-            from langchain_ollama import ChatOllama
-            model = ChatOllama(
-                model=model_name or os.getenv("OTHELLO_MODEL", "qwen2.5:3b"),
-                base_url=base_url or os.getenv("OLLAMA_HOST", "http://127.0.0.1:11434"),
-                temperature=0, format="json", num_predict=512, num_ctx=16384,
-                client_kwargs={"timeout": 120},
-            )
+            model = build_model(model_name, base_url)
         self.model = model
         graph = StateGraph(TurnState)
-        for name in ("observe", "plan", "analyze", "decide", "execute", "verify"):
+        for name in ("observe", "analyze", "decide", "execute", "verify"):
             graph.add_node(name, getattr(self, "_" + name))
         graph.add_edge(START, "observe")
-        graph.add_conditional_edges("observe", lambda s: "plan" if s["valid_moves"] else "execute")
-        for source, target in (("plan", "analyze"), ("analyze", "decide"),
+        graph.add_conditional_edges("observe", lambda s: "analyze" if s["valid_moves"] else "execute")
+        for source, target in (("analyze", "decide"),
                                ("decide", "execute"), ("execute", "verify"), ("verify", END)):
             graph.add_edge(source, target)
         self.graph = graph.compile()
 
-    def _ask(self, state, schema, task, payload, validate=None):
-        messages = [("system", SYSTEM), ("human", json.dumps({
-            "task": task, "schema": schema.model_json_schema(), "data": payload}, ensure_ascii=False))]
-        for attempt in range(2):
+    def _invoke(self, state, messages):
+        """Uma chamada ao modelo, com espaçamento e espera crescente em erros temporários da API."""
+        delay = max(0.0, float(os.getenv("OTHELLO_RETRY_INITIAL_SECONDS", "2")))
+        try:
+            retries = max(0, min(5, int(os.getenv("OTHELLO_MAX_RETRIES", str(MAX_RETRIES)))))
+        except ValueError:
+            retries = MAX_RETRIES
+        for retry in range(retries + 1):
+            if self._throttle:
+                wait_turn()
             start = perf_counter()
-            state["metrics"]["llm_calls"] += 1
             try:
                 answer = self.model.invoke(messages)
             except Exception as exc:
-                raise AgentError(f"Falha ao consultar Ollama: {exc}") from exc
-            finally:
                 state["metrics"]["llm_seconds"] += perf_counter() - start
+                if is_transient(exc) and not is_daily_quota(exc) and retry < retries:
+                    if delay:
+                        sleep(delay)
+                    delay = min(delay * 2, 8.0)
+                    continue
+                hint = " (cota diária esgotada: tente amanhã ou troque de provedor)" if is_daily_quota(exc) else ""
+                raise AgentError(f"Falha ao consultar {self.provider}: {exc}{hint}") from exc
+            state["metrics"]["llm_seconds"] += perf_counter() - start
+            state["metrics"]["llm_calls"] += 1
+            return answer
+
+    def _ask(self, state, schema, task, payload, validate=None):
+        messages = [("system", SYSTEM), ("human", json.dumps({
+            "task": task, "schema": schema.model_json_schema(), "data": payload}, ensure_ascii=False))]
+        for attempt in range(MAX_ATTEMPTS):
+            text = answer_text(self._invoke(state, messages))
             try:
-                parsed = schema.model_validate_json(answer.content).model_dump()
+                parsed = schema.model_validate_json(extract_json(text)).model_dump()
                 if validate:
                     validate(parsed)
                 return parsed
             except (ValueError, TypeError) as exc:
-                if attempt:
-                    raise AgentError("O modelo retornou duas respostas inválidas; turno preservado.") from exc
+                print(f"Tentativa {attempt + 1} de resposta inválida: {exc}", flush=True)
+                if attempt == MAX_ATTEMPTS - 1:
+                    raise AgentError(f"O modelo retornou {MAX_ATTEMPTS} respostas inválidas; turno preservado.") from exc
+                # Mantém a resposta errada no contexto para que o modelo veja o que corrigir.
+                messages.append(("assistant", text or "{}"))
                 messages.append(("human", f"Resposta inválida: {exc}. Corrija e retorne somente JSON."))
 
     def _observe(self, state):
@@ -102,29 +120,30 @@ class LLMAgent:
                 "valid_moves": tools.invoke("get_valid_moves"),
                 "status": tools.invoke("get_game_status")}
 
-    def _plan(self, state):
-        plan = self._ask(state, Plan, "Escolha um perfil para avaliar as alternativas com evaluate_moves.",
-                         {"observation": state["observation"], "valid_moves": state["valid_moves"],
-                          "profiles": {"balanced": "30 cantos, 5 mobilidade, 1 peças, -10 risco",
-                                       "mobility": "25 cantos, 10 mobilidade, 1 peças, -10 risco",
-                                       "corners": "50 cantos, 4 mobilidade, 1 peças, -15 risco"}})
-        return {"plan": plan}
-
     def _analyze(self, state):
-        return {"alternatives": state["tools"].invoke("evaluate_moves", strategy=state["plan"]["strategy"])}
+        profiles = ("balanced", "mobility", "corners")
+        alternatives = {profile: state["tools"].invoke("evaluate_moves", strategy=profile)
+                        for profile in profiles}
+        return {"alternatives": alternatives}
 
     def _decide(self, state):
         def validate(decision):
             if [decision["row"], decision["column"]] not in state["valid_moves"]:
-                raise ValueError("Escolha uma posição da lista valid_moves.")
-        decision = self._ask(state, Decision, "Compare alternativas e escolha uma jogada válida para make_move.",
-                             {"observation": state["observation"], "plan": state["plan"],
-                              "valid_moves": state["valid_moves"], "alternatives": state["alternatives"]}, validate)
-        return {"decision": decision}
+                raise ValueError(f"A jogada [{decision['row']}, {decision['column']}] é ilegal. "
+                                 f"Escolha exatamente uma destas: {state['valid_moves']}.")
+        decision = self._ask(state, Decision,
+                             "Compare as alternativas dos três perfis e escolha o perfil e uma jogada legal.",
+                             {"observation": state["observation"], "valid_moves": state["valid_moves"],
+                              "alternatives": state["alternatives"]}, validate)
+        return {"decision": decision, "plan": {"strategy": decision["strategy"]}}
 
     def _execute(self, state):
-        decision = state.get("decision", {"explanation": "Passe obrigatório: nenhuma jogada válida."})
-        return {"event": state["tools"].invoke("make_move", **decision)}
+        decision = state.get("decision")
+        if decision is None:
+            return {"event": state["tools"].invoke(
+                "make_move", explanation="Passe obrigatório: nenhuma jogada válida.")}
+        action = {key: decision[key] for key in ("row", "column", "explanation")}
+        return {"event": state["tools"].invoke("make_move", **action)}
 
     def _verify(self, state):
         return {"status": state["tools"].invoke("get_game_status")}

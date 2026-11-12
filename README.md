@@ -5,7 +5,7 @@ Projeto de portfólio desenvolvido a partir do TP05 de GCC128 — Inteligência 
 
 ## Arquitetura revisada
 
-Python 3, LangGraph para orquestração, LangChain para integração com Ollama e Tkinter para interface desktop.
+Python 3, LangGraph para orquestração, LangChain para integração com provedores LLM e Tkinter para interface desktop.
 O motor do jogo é independente da LLM e da interface. A estratégia heurística fornece uma referência
 experimental. O agente LLM deve observar, analisar alternativas, escolher, executar e verificar o resultado
 por meio de ferramentas, mantendo o histórico completo da partida.
@@ -51,14 +51,13 @@ coordenadas, regras e posse do turno; uma instância não pode jogar duas vezes.
 
 ## Agente LLM
 
-O grafo realiza `observe → plan → analyze → decide → execute → verify`. A primeira chamada à LLM
-escolhe um perfil heurístico; `evaluate_moves` calcula as alternativas. A segunda chamada compara
-essas alternativas e escolhe a ação com justificativa curta. `make_move` valida e executa; o estado
+O grafo realiza `observe → analyze → decide → execute → verify`. `evaluate_moves` calcula as alternativas
+nos três perfis; uma chamada à LLM escolhe o perfil e a jogada com justificativa curta. `make_move` valida e executa; o estado
 é consultado novamente. A LLM recebe o histórico completo da partida em cada turno, inclusive as
 jogadas adversárias. Não existe memória compartilhada entre partidas.
 
-Respostas JSON inválidas ou jogadas ilegais permitem uma correção por etapa. Falhas de conexão
-ou duas respostas inválidas interrompem o turno com erro explícito, sem substituição silenciosa por
+Respostas JSON inválidas ou jogadas ilegais permitem até duas correções. Falhas de conexão
+ou três respostas inválidas interrompem o turno com erro explícito, sem substituição silenciosa por
 um agente clássico. Passes obrigatórios dispensam chamada ao modelo.
 
 Instalação sugerida (Python 3.11 ou superior):
@@ -69,10 +68,18 @@ python -m venv .venv
 python -m pip install -e .
 ```
 
-Instale [Ollama](https://ollama.com/download), execute `ollama pull qwen2.5:3b` e mantenha o serviço
-ativo (`ollama serve`, quando necessário). Configure `OTHELLO_MODEL` para outro modelo local e
-`OLLAMA_HOST` para outro endpoint. O padrão é `http://127.0.0.1:11434`, temperatura 0 e timeout de
-120 segundos por chamada. A qualidade e o consumo de memória dependem do modelo e do hardware.
+O provedor padrão é Gemini (`OTHELLO_PROVIDER=gemini`, modelo `gemini-2.5-flash`); configure
+`GOOGLE_API_KEY` e instale `langchain-google-genai`. Para usar [Ollama](https://ollama.com/download),
+instale `langchain-ollama`, execute `ollama pull qwen2.5:3b` e defina `OTHELLO_PROVIDER=ollama`.
+O endpoint padrão é `http://127.0.0.1:11434`; `OLLAMA_HOST` permite alterá-lo. Configure
+`OTHELLO_MODEL` para escolher outro modelo. O timeout é de 120 segundos por chamada.
+
+Por padrão, provedores de API espaçam chamadas em 4 segundos para reduzir erros de limite; Ollama
+local não adiciona intervalo. Para acelerar uma avaliação, defina `OTHELLO_MIN_INTERVAL=0` (pode
+aumentar erros 429 ou limites do provedor). Erros temporários são tentados novamente até duas vezes,
+com espera inicial de 2 segundos e backoff limitado a 8 segundos. `OTHELLO_MAX_RETRIES` e
+`OTHELLO_RETRY_INITIAL_SECONDS` permitem ajustar esse comportamento. Para uma primeira medição,
+rode poucas partidas e aumente a quantidade quando confirmar a latência e os limites da sua API.
 
 Referências de implementação: [StateGraph](https://reference.langchain.com/python/langgraph/graph/state)
 e [ChatOllama](https://reference.langchain.com/python/langchain-ollama/langchain_ollama/chat_models/ChatOllama).
@@ -85,6 +92,13 @@ othello gui
 othello play --black heuristic --white random --seed 42 --json artifacts/partida.json
 othello play --black llm --white heuristic --model qwen2.5:3b --json artifacts/llm.json
 python -m unittest discover -s tests -v
+```
+
+Exemplo PowerShell para acelerar uma comparação curta com API:
+
+```powershell
+$env:OTHELLO_MIN_INTERVAL = '0'
+othello experiment --a llm --b heuristic --games 2 --seed 42 --output artifacts/llm-fast
 ```
 
 Também é possível usar `python -m othello` no lugar de `othello`. Na interface, escolha os
